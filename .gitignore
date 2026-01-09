@@ -12,6 +12,9 @@ ENV/
 # Результаты выполнения
 results_*.json
 
+algorithms_explanation.txt
+README.md
+
 # IDE
 .vscode/
 .idea/
