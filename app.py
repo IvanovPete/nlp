@@ -14,34 +14,35 @@ from nltk import pos_tag
 from nltk.chunk import ne_chunk
 
 # Скачиваем необходимые данные NLTK
-# Список необходимых данных NLTK
-nltk_data = [
-    'punkt',  # для токенизации
-    'averaged_perceptron_tagger',  # для POS-тегирования
-    'maxent_ne_chunker',  # для NER
-    'words',  # словарь для NER
-    'wordnet'  # для лемматизации
+# Список необходимых данных NLTK с путями для проверки
+nltk_resources = [
+    ('punkt', 'tokenizers/punkt'),
+    ('averaged_perceptron_tagger', 'taggers/averaged_perceptron_tagger'),
+    # для английского языка
+    ('averaged_perceptron_tagger_eng',
+     'taggers/averaged_perceptron_tagger_eng'),
+    ('maxent_ne_chunker', 'chunkers/maxent_ne_chunker'),
+    ('maxent_ne_chunker_tab', 'chunkers/maxent_ne_chunker_tab'),
+    ('words', 'corpora/words'),
+    ('wordnet', 'corpora/wordnet')
 ]
 
 # Загружаем данные, если они отсутствуют
-for data in nltk_data:
+for resource_name, resource_path in nltk_resources:
     try:
-        if data == 'punkt':
-            nltk.data.find('tokenizers/punkt')
-        elif data == 'averaged_perceptron_tagger':
-            nltk.data.find('taggers/averaged_perceptron_tagger')
-        elif data == 'maxent_ne_chunker':
-            nltk.data.find('chunkers/maxent_ne_chunker')
-        elif data == 'words':
-            nltk.data.find('corpora/words')
-        elif data == 'wordnet':
-            nltk.data.find('corpora/wordnet')
+        nltk.data.find(resource_path)
     except LookupError:
-        print(f"Загрузка данных NLTK: {data}")
+        print(f"Загрузка данных NLTK: {resource_name}")
         try:
-            nltk.download(data, quiet=True)
+            nltk.download(resource_name, quiet=True)
+            # Проверяем, что ресурс действительно загружен
+            try:
+                nltk.data.find(resource_path)
+                print(f"  ✓ {resource_name} успешно загружен")
+            except LookupError:
+                print(f"  ⚠ {resource_name} не найден после загрузки")
         except Exception as e:
-            print(f"Ошибка при загрузке {data}: {e}")
+            print(f"  ✗ Ошибка при загрузке {resource_name}: {e}")
 
 app = FastAPI()
 
@@ -266,6 +267,18 @@ def pos_tagging(request: TextRequest):
         raise HTTPException(status_code=400, detail="Список текстов не может быть пустым")
     
     try:
+        # Проверяем доступность теггера перед использованием
+        try:
+            nltk.data.find('taggers/averaged_perceptron_tagger_eng')
+        except LookupError:
+            try:
+                nltk.data.find('taggers/averaged_perceptron_tagger')
+            except LookupError:
+                raise HTTPException(
+                    status_code=500,
+                    detail="NLTK POS tagger не найден. Запустите setup_nltk.py для загрузки ресурсов."
+                )
+        
         result = []
         for text in request.texts:
             if not text or not isinstance(text, str):
@@ -284,6 +297,8 @@ def pos_tagging(request: TextRequest):
                 })
         
         return {"results": result}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при POS-тегировании: {str(e)}\n{traceback.format_exc()}")
 
@@ -295,6 +310,36 @@ def ner(request: TextRequest):
         raise HTTPException(status_code=400, detail="Список текстов не может быть пустым")
     
     try:
+        # Проверяем доступность необходимых ресурсов перед использованием
+        try:
+            nltk.data.find('taggers/averaged_perceptron_tagger_eng')
+        except LookupError:
+            try:
+                nltk.data.find('taggers/averaged_perceptron_tagger')
+            except LookupError:
+                raise HTTPException(
+                    status_code=500,
+                    detail="NLTK POS tagger не найден. Запустите setup_nltk.py для загрузки ресурсов."
+                )
+        
+        # Проверяем наличие chunker (пробуем оба варианта)
+        chunker_found = False
+        try:
+            nltk.data.find('chunkers/maxent_ne_chunker_tab')
+            chunker_found = True
+        except LookupError:
+            try:
+                nltk.data.find('chunkers/maxent_ne_chunker')
+                chunker_found = True
+            except LookupError:
+                pass
+        
+        if not chunker_found:
+            raise HTTPException(
+                status_code=500,
+                detail="NLTK NE chunker не найден. Запустите setup_nltk.py для загрузки ресурсов."
+            )
+        
         result = []
         for text in request.texts:
             if not text or not isinstance(text, str):
@@ -321,6 +366,8 @@ def ner(request: TextRequest):
                 })
         
         return {"results": result}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при NER: {str(e)}\n{traceback.format_exc()}")
 

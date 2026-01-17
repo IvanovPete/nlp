@@ -35,7 +35,9 @@ def send_request(endpoint, texts):
     payload = {"texts": texts}
     
     try:
-        response = requests.post(url, json=payload, timeout=30)
+        # Увеличиваем timeout для NER, так как он обрабатывает много текстов
+        timeout = 600 if endpoint == "/text_nltk/ner" else 30
+        response = requests.post(url, json=payload, timeout=timeout)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
